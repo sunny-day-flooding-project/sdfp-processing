@@ -125,7 +125,7 @@ def get_isu_atm(id, begin_date, end_date):
     """   
     
     new_begin_date = pd.to_datetime(begin_date, utc=True) 
-    new_end_date = pd.to_datetime(end_date, utc=True) 
+    new_end_date = pd.to_datetime(end_date, utc=True) + datetime.timedelta(days=1)
     
     query = {'station' : str(id),
              'data' : 'all',
@@ -134,7 +134,7 @@ def get_isu_atm(id, begin_date, end_date):
              'day1' : new_begin_date.day,
              'year2' : new_end_date.year,
              'month2' : new_end_date.month,
-             'day2' : new_end_date.day + 1,
+             'day2' : new_end_date.day,
              'product' : 'air_pressure',
              'format' : 'comma',
              'latlon' : 'yes'
@@ -352,8 +352,6 @@ def main():
         'POSTGRESQL_PASSWORD') + "@" + os.environ.get('POSTGRESQL_HOSTNAME') + "/" + os.environ.get('POSTGRESQL_DATABASE')
 
     engine = create_engine(SQLALCHEMY_DATABASE_URL)
-
-    print(engine)
     
     #####################
     # Collect new data  #
@@ -368,6 +366,8 @@ def main():
     if new_data.shape[0] == 0:
         warnings.warn("- No new raw data!")
         return
+    
+    print(new_data.shape[0] , "new records!")
         
     sensors_w_new_data = list(new_data["sensor_ID"].unique())
     
@@ -387,6 +387,7 @@ def main():
         interpolated_data = interpolate_atm_data(prepared_data)
     except: 
         interpolated_data = pd.DataFrame()
+        warnings.warn("Error interpolating atmospheric pressure data.")
     
     if interpolated_data.shape[0] == 0:
         warnings.warn("No data to write to database!")
