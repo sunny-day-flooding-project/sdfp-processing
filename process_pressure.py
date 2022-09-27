@@ -308,7 +308,7 @@ def match_measurements_to_survey(measurements, surveys):
             warnings.warn("Warning: There are data that precede the survey dates for: " + selected_site)
             
         if number_of_surveys == 1:
-            selected_measurements["date_surveyed"] = pd.to_datetime(np.where(selected_measurements["date"] >= survey_dates[0], survey_dates[0], np.nan))
+            selected_measurements["date_surveyed"] = pd.to_datetime(np.where(selected_measurements["date"] >= survey_dates[0], survey_dates[0], np.nan), utc = True)
             
         if number_of_surveys > 1:
             survey_dates.append(pd.to_datetime(datetime.datetime.utcnow(), utc=True))
