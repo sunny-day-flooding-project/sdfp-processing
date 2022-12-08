@@ -394,18 +394,8 @@ def main():
     # Collect new data  #
     #####################
 
-    r = requests.get("https://postman-echo.com/ip")
-    print(r)
-    print(r.content)
-
-    max_date = pd.read_sql_query("SELECT max(date) as date FROM sensor_water_depth", engine)
-    max_date = max_date.at[0, 'date'] + timedelta(days=3)
-    max_date = max_date.strftime("%Y-%m-%d")
-    print(max_date)
-
     try:
-        new_data = pd.read_sql_query("SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 AND date < '%s'" % (max_date), engine).sort_values(['place','date']).drop_duplicates()
-        # new_data = pd.read_sql_query("SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800", engine).sort_values(['place','date']).drop_duplicates()
+        new_data = pd.read_sql_query("SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800", engine).sort_values(['place','date']).drop_duplicates()
     except Exception as ex:
         new_data = pd.DataFrame()
         warnings.warn("Connection to database failed to return data")
