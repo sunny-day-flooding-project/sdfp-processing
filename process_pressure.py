@@ -89,11 +89,13 @@ def get_noaa_atm(id, begin_date, end_date):
     
     r_df = pd.DataFrame.from_dict(j["data"])
     
-    r_df["t"] = pd.to_datetime(r_df["t"], utc=True); r_df["id"] = str(id); r_df["notes"] = "coop"
-    
+    r_df['v'].replace('', np.nan, inplace=True)
+    r_df["t"] = pd.to_datetime(r_df["t"], utc=True) 
+    r_df["id"] = str(id) 
+    r_df["notes"] = "coop"
     r_df = r_df.loc[:,["id","t","v","notes"]].rename(columns = {"id":"id","t":"date","v":"pressure_mb"})
-    
-    return r_df
+
+    return r_df.dropna()
     
 def get_nws_atm(id, begin_date, end_date):
     """Retrieve atmospheric pressure data from the NWS API
@@ -395,7 +397,7 @@ def main():
     #####################
 
     try:
-        new_data = pd.read_sql_query("SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date > '2022-11-25'", engine).sort_values(['place','date']).drop_duplicates()
+        new_data = pd.read_sql_query("SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date > '2022-11-21'", engine).sort_values(['place','date']).drop_duplicates()
     except Exception as ex:
         new_data = pd.DataFrame()
         warnings.warn("Connection to database failed to return data")
