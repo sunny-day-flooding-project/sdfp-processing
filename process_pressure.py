@@ -407,7 +407,8 @@ def main():
     #####################
 
     try:
-        new_data = pd.read_sql_query("SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date > '2022-11-11' AND \"sensor_ID\"!='DE_01'", engine).sort_values(['place','date']).drop_duplicates()
+        # new_data = pd.read_sql_query("SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date > '2022-11-11' AND \"sensor_ID\"!='DE_01'", engine).sort_values(['place','date']).drop_duplicates()
+        new_data = pd.read_sql_query("SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date > '2022-11-11'", engine).sort_values(['place','date']).drop_duplicates()
     except Exception as ex:
         new_data = pd.DataFrame()
         warnings.warn("Connection to database failed to return data")
