@@ -355,7 +355,7 @@ def match_measurements_to_survey(measurements, surveys):
             
         if number_of_surveys > 1:
             survey_dates.append(pd.to_datetime(datetime.utcnow(), utc=True))
-            selected_measurements["date_surveyed"] = pd.to_datetime(pd.cut(selected_measurements["date"], bins = survey_dates, labels = survey_dates[:-1]), utc = True)
+            selected_measurements["date_surveyed"] = pd.to_datetime(pd.cut(selected_measurements["date"], bins = survey_dates, labels = survey_dates[:-1]), utc = True).astype('datetime64[ns, UTC]')
     
         merged_measurements_and_surveys = pd.merge(selected_measurements, surveys, how = "left", on = ["place","sensor_ID","date_surveyed"])
         print()
@@ -408,7 +408,7 @@ def main():
 
     try:
         # new_data = pd.read_sql_query("SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date > '2022-11-11' AND \"sensor_ID\"!='DE_01'", engine).sort_values(['place','date']).drop_duplicates()
-        new_data = pd.read_sql_query("SELECT * FROM sensor_data WHERE \"sensor_ID\"!='CB_03' AND processed = 'FALSE' AND pressure > 800 and date > '2022-11-11'", engine).sort_values(['place','date']).drop_duplicates()
+        new_data = pd.read_sql_query("SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date > '2022-11-11'", engine).sort_values(['place','date']).drop_duplicates()
     except Exception as ex:
         new_data = pd.DataFrame()
         warnings.warn("Connection to database failed to return data")
