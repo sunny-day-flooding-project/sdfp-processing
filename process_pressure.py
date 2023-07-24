@@ -407,7 +407,7 @@ def main():
     #####################
 
     today= pd.to_datetime(datetime.utcnow())
-    start_date = today - timedelta(days=7)
+    start_date = today - timedelta(days=14)
 
     try:
         # new_data = pd.read_sql_query(f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date >= '{start_date}' AND \"sensor_ID\"!='DE_01'", engine).sort_values(['place','date']).drop_duplicates()
