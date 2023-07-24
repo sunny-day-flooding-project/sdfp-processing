@@ -406,9 +406,12 @@ def main():
     # Collect new data  #
     #####################
 
+    today= pd.to_datetime(datetime.utcnow())
+    start_date = today - timedelta(days=7)
+
     try:
-        # new_data = pd.read_sql_query("SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date > '2022-11-11' AND \"sensor_ID\"!='DE_01'", engine).sort_values(['place','date']).drop_duplicates()
-        new_data = pd.read_sql_query("SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date > '2022-11-11' AND \"sensor_ID\" NOT LIKE 'CB%'", engine).sort_values(['place','date']).drop_duplicates()
+        # new_data = pd.read_sql_query(f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date >= '{start_date}' AND \"sensor_ID\"!='DE_01'", engine).sort_values(['place','date']).drop_duplicates()
+        new_data = pd.read_sql_query(f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date >= '{start_date}'", engine).sort_values(['place','date']).drop_duplicates()
     except Exception as ex:
         new_data = pd.DataFrame()
         warnings.warn("Connection to database failed to return data")
