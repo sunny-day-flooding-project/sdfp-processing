@@ -420,7 +420,7 @@ def main():
 
     try:
         # new_data = pd.read_sql_query(f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date >= '{start_date}' AND \"sensor_ID\"!='DE_01'", engine).sort_values(['place','date']).drop_duplicates()
-        new_data = pd.read_sql_query(f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date >= '{start_date}' AND place='Carolina Beach, North Carolina'", engine).sort_values(['place','date']).drop_duplicates()
+        new_data = pd.read_sql_query(f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date >= '{start_date}'", engine).sort_values(['place','date']).drop_duplicates()
     except Exception as ex:
         new_data = pd.DataFrame()
         warnings.warn("Connection to database failed to return data")
