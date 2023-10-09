@@ -222,8 +222,8 @@ def get_fiman_atm(id, begin_date, end_date):
     r_df = pd.read_sql_query("SELECT * FROM external_api_data WHERE id='" + id + "' AND api_name='FIMAN' AND type='pressure' AND date >= '" + new_begin_date.strftime('%Y-%m-%d %H:%M:%S') + "' AND date <= '" + new_end_date.strftime('%Y-%m-%d %H:%M:%S') + "'", engine).sort_values(['date']).drop_duplicates()
     r_df["date"] = pd.to_datetime(r_df["date"], utc = True); 
     r_df = r_df.loc[:,["id","date","value","api_name"]].rename(columns = {"value":"pressure_mb", "api_name":"notes"})
-    
-    return r_df
+
+    return pd.DataFrame()
 
 #####################
 # atm API functions #
@@ -273,6 +273,7 @@ def interpolate_atm_data(x, debug = True):
         dt_min = dt_range[0]
         dt_max = dt_range[1]
         
+        # Shouldn't ever hit this block since the time range on the inital request is limited to 14 days
         if dt_duration >= timedelta(days=30):
             chunks = int(np.ceil(dt_duration / timedelta(days=30)))
             span = dt_duration / chunks
@@ -296,9 +297,17 @@ def interpolate_atm_data(x, debug = True):
                                             begin_date = dt_min.strftime("%Y%m%d %H:%M"),
                                             end_date = dt_max.strftime("%Y%m%d %H:%M")).drop_duplicates()     
             
-        if(atm_data.empty):            
-            warnings.warn(message = f"No atm pressure data available for: {selected_place}")
-            pass
+        if(atm_data.empty):
+            # Try backup source
+            print("Trying backup source...")
+            atm_data = get_atm_pressure(atm_id = selected_data["alt_atm_station_id"].unique()[0], 
+                                atm_src = selected_data["alt_atm_data_src"].unique()[0], 
+                                begin_date = dt_min.strftime("%Y%m%d %H:%M"),
+                                end_date = dt_max.strftime("%Y%m%d %H:%M")).drop_duplicates() 
+            
+            if (atm_data.empty):
+                warnings.warn(message = f"No atm pressure data available for: {selected_place}")
+                pass
                         
         combined_data = pd.concat([selected_data.query("date > @atm_data['date'].min() & date < @atm_data['date'].max()") , atm_data]).sort_values("date").set_index("date")
         combined_data["pressure_mb"] = combined_data["pressure_mb"].astype(float).interpolate(method='time')
@@ -411,7 +420,7 @@ def main():
 
     try:
         # new_data = pd.read_sql_query(f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date >= '{start_date}' AND \"sensor_ID\"!='DE_01'", engine).sort_values(['place','date']).drop_duplicates()
-        new_data = pd.read_sql_query(f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date >= '{start_date}'", engine).sort_values(['place','date']).drop_duplicates()
+        new_data = pd.read_sql_query(f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date >= '{start_date}' AND place='Carolina Beach, North Carolina'", engine).sort_values(['place','date']).drop_duplicates()
     except Exception as ex:
         new_data = pd.DataFrame()
         warnings.warn("Connection to database failed to return data")
