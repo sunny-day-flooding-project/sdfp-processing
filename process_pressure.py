@@ -223,7 +223,7 @@ def get_fiman_atm(id, begin_date, end_date):
     r_df["date"] = pd.to_datetime(r_df["date"], utc = True); 
     r_df = r_df.loc[:,["id","date","value","api_name"]].rename(columns = {"value":"pressure_mb", "api_name":"notes"})
 
-    return pd.DataFrame()
+    return r_df
 
 #####################
 # atm API functions #
