@@ -179,41 +179,9 @@ def get_fiman_atm(id, begin_date, end_date):
         r_df (pd.DataFrame): DataFrame of atmospheric pressure from specified station and time range. Dates in UTC
     """    
     print(inspect.stack()[0][3])    # print the name of the function we just entered
-    
-    #
-    # It looks like if the data are not long enough (date-wise), the query to fiman will not return anything
-    # at which point this will fail.
-    #
-    
-    # fiman_gauge_keys = pd.read_csv("data/fiman_gauge_key.csv").query("site_id == @id & Sensor == 'Barometric Pressure'")
-    
+
     new_begin_date = pd.to_datetime(begin_date, utc=True) - timedelta(seconds = 3600)
     new_end_date = pd.to_datetime(end_date, utc=True) + timedelta(seconds = 3600)
-    
-    # query = {'site_id' : fiman_gauge_keys.iloc[0]["site_id"],
-    #          'data_start' : new_begin_date.strftime('%Y-%m-%d %H:%M:%S'),
-    #          'end_date' : new_end_date.strftime('%Y-%m-%d %H:%M:%S'),
-    #          'format_datetime' : '%Y-%m-%d %H:%M:%S',
-    #          'tz' : 'utc',
-    #          'show_raw' : True,
-    #          'show_quality' : True,
-    #          'sensor_id' : fiman_gauge_keys.iloc[0]["sensor_id"]}
-    # print(query)    # FOR DEBUGGING
-    
-    # r = requests.get(os.environ.get("FIMAN_URL"), params=query)
-    # j = r.content
-    # print(j)
-    # doc = xmltodict.parse(j)
-    
-    # unnested = doc["onerain"]["response"]["general"]["row"]
-    
-    # r_df = pd.DataFrame.from_dict(unnested)
-
-    # r_df["date"] = pd.to_datetime(r_df["data_time"], utc=True); r_df["id"] = str(id); r_df["notes"] = "FIMAN"
-    
-    # r_df = r_df.loc[:,["id","date","data_value","notes"]].rename(columns = {"data_value":"pressure_mb"})
-    
-    # return r_df
 
     SQLALCHEMY_DATABASE_URL = "postgresql://" + os.environ.get('POSTGRESQL_USER') + ":" + os.environ.get(
         'POSTGRESQL_PASSWORD') + "@" + os.environ.get('POSTGRESQL_HOSTNAME') + "/" + os.environ.get('POSTGRESQL_DATABASE')
@@ -297,7 +265,7 @@ def interpolate_atm_data(x, debug = True):
                                             begin_date = dt_min.strftime("%Y%m%d %H:%M"),
                                             end_date = dt_max.strftime("%Y%m%d %H:%M")).drop_duplicates()     
             
-        if(atm_data.empty):
+        if(selected_data["alt_atm_data_src"].unique()[0] and (atm_data.empty or atm_data['date'].max() < selected_data['date'].min()) ):
             # Try backup source
             print("Trying backup source...")
             atm_data = get_atm_pressure(atm_id = selected_data["alt_atm_station_id"].unique()[0], 
@@ -419,7 +387,6 @@ def main():
     start_date = today - timedelta(days=14)
 
     try:
-        # new_data = pd.read_sql_query(f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date >= '{start_date}' AND \"sensor_ID\"!='DE_01'", engine).sort_values(['place','date']).drop_duplicates()
         new_data = pd.read_sql_query(f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date >= '{start_date}'", engine).sort_values(['place','date']).drop_duplicates()
     except Exception as ex:
         new_data = pd.DataFrame()
