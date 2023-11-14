@@ -151,7 +151,8 @@ def get_isu_atm(id, begin_date, end_date):
              'day2' : new_end_date.day,
              'product' : 'air_pressure',
              'format' : 'comma',
-             'latlon' : 'yes'
+             'latlon' : 'yes',
+             'tz' : 'Etc/UTC'
              }
     
     r = requests.get(url = 'https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py', params=query, headers={'User-Agent' : 'Sunny_Day_Flooding_project, https://github.com/sunny-day-flooding-project'})
@@ -190,6 +191,7 @@ def get_fiman_atm(id, begin_date, end_date):
     r_df = pd.read_sql_query("SELECT * FROM api_data WHERE id='" + id + "' AND api_name='FIMAN' AND type='pressure' AND date >= '" + new_begin_date.strftime('%Y-%m-%d %H:%M:%S') + "' AND date <= '" + new_end_date.strftime('%Y-%m-%d %H:%M:%S') + "'", engine).sort_values(['date']).drop_duplicates()
     r_df["date"] = pd.to_datetime(r_df["date"], utc = True); 
     r_df = r_df.loc[:,["id","date","value","api_name"]].rename(columns = {"value":"pressure_mb", "api_name":"notes"})
+    engine.dispose()
 
     return r_df
 
