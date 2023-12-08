@@ -389,8 +389,10 @@ def main():
     start_date = today - timedelta(days=14)
 
     try:
-        new_data = pd.read_sql_query(f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date >= '{start_date}'", engine).sort_values(['place','date']).drop_duplicates()
-        # new_data = pd.read_sql_query(f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and ((date >= '{start_date}' and \"sensor_ID\" NOT LIKE 'CB%') or (date >= '{start_date}' AND date < '2023-12-07 07:00:00' and \"sensor_ID\" LIKE 'CB%'))", engine).sort_values(['place','date']).drop_duplicates()
+        # new_data = pd.read_sql_query(f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date >= '{start_date}'", engine).sort_values(['place','date']).drop_duplicates()
+        query = f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and ((date >= '{start_date}' and \"sensor_ID\" NOT LIKE 'CB%%') or (date >= '{start_date}' AND date < '2023-12-07 07:00:00' and \"sensor_ID\" LIKE 'CB%%'))"
+        print(query)
+        new_data = pd.read_sql_query(query, engine).sort_values(['place','date']).drop_duplicates()
     except Exception as ex:
         new_data = pd.DataFrame()
         warnings.warn("Connection to database failed to return data")
