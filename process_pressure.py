@@ -279,7 +279,34 @@ def interpolate_atm_data(x, debug = True):
                 warnings.warn(message = f"No atm pressure data available for: {selected_place}")
                 pass
                         
-        combined_data = pd.concat([selected_data.query("date > @atm_data['date'].min() & date < @atm_data['date'].max()") , atm_data]).sort_values("date").set_index("date")
+        # If the atmospheric data falls short of the pressure data by less than an hour (which happens when 
+        # the most recent atmospheric observation is not yet available), extrapolate the 
+        # atmospheric data to cover the range.
+        #
+        # Then only mark data that did not use extrapolated values as being "processed" so that extrapolated corrections
+        # will get re-calculated with the real atmospheric pressure values later.
+        #
+            
+        atm_data.sort_values("date").set_index("date")    # not sure if this is necessary, but it seems like a good idea
+        t_last = atm_data["date"].iloc[-1]
+        if atm_data["date"].max() < selected_data["date"].max() and (selected_data["date"].max() - atm_data["date"].max()) < timedelta(seconds = 3600):
+            if atm_data.shape[0] > 1:  # (Must have at least 2 pressure values, otherwise skip it.)
+                # duplicate the last row
+                new_index = atm_data.tail(1).index[0] + 1
+                new_row = pd.DataFrame(data=atm_data.tail(1).values, index=[new_index], columns=atm_data.columns)
+                atm_data = pd.concat([atm_data, new_row])    
+
+                # set the time based on the timestep of the previous 2 points
+                atm_data['date'].iloc[-1] = atm_data['date'].iloc[-2] + (atm_data['date'].iloc[-2] - atm_data['date'].iloc[-3])
+                # set the value as a linear extrap of the previous 2 points
+                atm_data["pressure_mb"].iloc[-1] = float(atm_data["pressure_mb"].iloc[-2]) + (float(atm_data["pressure_mb"].iloc[-2]) - float(atm_data["pressure_mb"].iloc[-3]))
+  
+                t_last = atm_data["date"].iloc[-2]    # time of last non extrapolated value
+
+        combined_data = pd.concat([selected_data.query("date > @atm_data['date'].min() & date < @atm_data['date'].max()") , atm_data]).sort_values("date")
+        # Set the "processed" flag to true for those points that did not use extrapolated atm press values
+        combined_data["processed"] = combined_data["date"] <= t_last
+        combined_data = combined_data.set_index("date")
         combined_data["pressure_mb"] = combined_data["pressure_mb"].astype(float).interpolate(method='time')
                 
         interpolated_data = pd.concat([interpolated_data, combined_data.loc[combined_data["place"].notna()].reset_index()[list(selected_data)]])
@@ -357,7 +384,7 @@ def format_interpolated_data(x):
     formatted_data["sensor_water_depth"] = ((((formatted_data["sensor_pressure"] - formatted_data["atm_pressure"]) * 100) / (1020 * 9.81)) * 3.28084)
     formatted_data["qa_qc_flag"] = False; formatted_data["tag"] = "new_data"
     
-    col_list = ["place","sensor_ID","date","atm_pressure","sensor_pressure","voltage","notes","sensor_water_depth","qa_qc_flag", "tag","atm_data_src","atm_station_id"]
+    col_list = ["place","sensor_ID","date","atm_pressure","sensor_pressure","voltage","notes","sensor_water_depth","qa_qc_flag", "tag","atm_data_src","atm_station_id", "processed"]
     
     formatted_data = formatted_data.loc[:,col_list]
     
@@ -438,10 +465,12 @@ def main():
         return "No data to write to database!"
     
     formatted_data = format_interpolated_data(interpolated_data)
+    # Copy data and drop processed flag so that sensor_water_depth is not marked as processed
+    copy = formatted_data.copy().drop(columns="processed")
     
     # Upsert the new data to the database table
     try:
-        formatted_data.to_sql("sensor_water_depth", engine, if_exists = "append", method=postgres_upsert)
+        copy.to_sql("sensor_water_depth", engine, if_exists = "append", method=postgres_upsert)
         print("Processed data to produce water depth!")
     except Exception as ex:
         warnings.warn("Error adding processed data to `sensor_water_depth`")
@@ -449,9 +478,11 @@ def main():
         message = template.format(type(ex).__name__, ex.args)
         print(message)
     
-    updated_raw_data = new_data.merge(formatted_data.reset_index().loc[:,["place","sensor_ID","date","sensor_water_depth"]], on=["place","sensor_ID","date"], how = "left")
-    updated_raw_data = updated_raw_data[updated_raw_data["sensor_water_depth"].notna()].drop(columns="sensor_water_depth")
-    updated_raw_data["processed"] = True
+    updated_raw_data = new_data.merge(formatted_data.reset_index().loc[:,["place","sensor_ID","date","sensor_water_depth","processed"]], on=["place","sensor_ID","date"], how = "left")
+    # Drop duplicated 'processed' column and rename correct one to remove suffix 
+    updated_raw_data = updated_raw_data[updated_raw_data["sensor_water_depth"].notna()].drop(columns=["sensor_water_depth", "processed_x"])
+    updated_raw_data = updated_raw_data.rename(columns={"processed_y": "processed"})
+    # updated_raw_data["processed"] = True
     
     updated_raw_data.set_index(['place', 'sensor_ID', 'date'], inplace=True)
     
