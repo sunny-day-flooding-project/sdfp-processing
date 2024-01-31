@@ -291,6 +291,9 @@ def interpolate_atm_data(x, debug = True):
         t_last = atm_data["date"].iloc[-1]
         if atm_data["date"].max() < selected_data["date"].max() and (selected_data["date"].max() - atm_data["date"].max()) < timedelta(seconds = 3600):
             if atm_data.shape[0] > 1:  # (Must have at least 2 pressure values, otherwise skip it.)
+                print("ENTERED EXTRAPOLATION BLOCK")
+                print("INITIAL ATM DATA")
+                print(atm_data)
                 # duplicate the last row
                 new_index = atm_data.tail(1).index[0] + 1
                 new_row = pd.DataFrame(data=atm_data.tail(1).values, index=[new_index], columns=atm_data.columns)
@@ -300,7 +303,9 @@ def interpolate_atm_data(x, debug = True):
                 atm_data['date'].iloc[-1] = atm_data['date'].iloc[-2] + (atm_data['date'].iloc[-2] - atm_data['date'].iloc[-3])
                 # set the value as a linear extrap of the previous 2 points
                 atm_data["pressure_mb"].iloc[-1] = float(atm_data["pressure_mb"].iloc[-2]) + (float(atm_data["pressure_mb"].iloc[-2]) - float(atm_data["pressure_mb"].iloc[-3]))
-  
+
+                print("APPENDED ATM DATA")
+                print(atm_data)
                 t_last = atm_data["date"].iloc[-2]    # time of last non extrapolated value
 
         combined_data = pd.concat([selected_data.query("date > @atm_data['date'].min() & date < @atm_data['date'].max()") , atm_data]).sort_values("date")
