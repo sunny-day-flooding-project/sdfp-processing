@@ -307,7 +307,7 @@ def interpolate_atm_data(x, debug = True):
 
                 print("APPENDED ATM DATA")
                 print(atm_data)
-                t_last = atm_data["date"].iloc[-2]    # time of last non extrapolated value
+                
 
         combined_data = pd.concat([selected_data.query("date > @atm_data['date'].min() & date < @atm_data['date'].max()") , atm_data]).sort_values("date")
         # Set the "processed" flag to true for those points that did not use extrapolated atm press values
