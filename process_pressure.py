@@ -286,7 +286,7 @@ def interpolate_atm_data(x, debug = True):
         # Then only mark data that did not use extrapolated values as being "processed" so that extrapolated corrections
         # will get re-calculated with the real atmospheric pressure values later.
         #
-            
+
         atm_data.sort_values("date").set_index("date")    # not sure if this is necessary, but it seems like a good idea
         t_last = atm_data["date"].iloc[-1]
         if atm_data["date"].max() < selected_data["date"].max() and (selected_data["date"].max() - atm_data["date"].max()) < timedelta(seconds = 3600):
@@ -294,15 +294,16 @@ def interpolate_atm_data(x, debug = True):
                 print("ENTERED EXTRAPOLATION BLOCK")
                 print("INITIAL ATM DATA")
                 print(atm_data)
-                # duplicate the last row
-                new_index = atm_data.tail(1).index[0] + 1
-                new_row = pd.DataFrame(data=atm_data.tail(1).values, index=[new_index], columns=atm_data.columns)
-                atm_data = pd.concat([atm_data, new_row])    
+                while(atm_data["date"].max() < selected_data["date"].max() and (selected_data["date"].max() - atm_data["date"].max()) < timedelta(seconds = 3600)):
+                    # duplicate the last row
+                    new_index = atm_data.tail(1).index[0] + 1
+                    new_row = pd.DataFrame(data=atm_data.tail(1).values, index=[new_index], columns=atm_data.columns)
+                    atm_data = pd.concat([atm_data, new_row])    
 
-                # set the time based on the timestep of the previous 2 points
-                atm_data['date'].iloc[-1] = atm_data['date'].iloc[-2] + (atm_data['date'].iloc[-2] - atm_data['date'].iloc[-3])
-                # set the value as a linear extrap of the previous 2 points
-                atm_data["pressure_mb"].iloc[-1] = float(atm_data["pressure_mb"].iloc[-2]) + (float(atm_data["pressure_mb"].iloc[-2]) - float(atm_data["pressure_mb"].iloc[-3]))
+                    # set the time based on the timestep of the previous 2 points
+                    atm_data['date'].iloc[-1] = atm_data['date'].iloc[-2] + (atm_data['date'].iloc[-2] - atm_data['date'].iloc[-3])
+                    # set the value as a linear extrap of the previous 2 points
+                    atm_data["pressure_mb"].iloc[-1] = float(atm_data["pressure_mb"].iloc[-2]) + (float(atm_data["pressure_mb"].iloc[-2]) - float(atm_data["pressure_mb"].iloc[-3]))
 
                 print("APPENDED ATM DATA")
                 print(atm_data)
