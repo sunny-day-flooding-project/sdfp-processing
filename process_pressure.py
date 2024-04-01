@@ -422,7 +422,7 @@ def main():
     start_date = today - timedelta(days=14)
 
     try:
-        query = f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date >= '{start_date}' AND \"sensor_ID\"!='DE_04'"
+        query = f"SELECT * FROM sensor_data WHERE processed = 'FALSE' AND pressure > 800 and date >= '{start_date}'"
         print(query)
         new_data = pd.read_sql_query(query, engine).sort_values(['place','date']).drop_duplicates()
     except Exception as ex:
