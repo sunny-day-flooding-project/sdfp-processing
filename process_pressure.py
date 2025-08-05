@@ -86,7 +86,10 @@ def get_noaa_atm(id, begin_date, end_date):
     r = requests.get('https://api.tidesandcurrents.noaa.gov/api/prod/datagetter/', params=query)
     
     j = r.json()
-    
+
+    if ('data' not in j):
+        return None
+
     r_df = pd.DataFrame.from_dict(j["data"])
     
     r_df['v'].replace('', np.nan, inplace=True)
