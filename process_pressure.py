@@ -87,7 +87,8 @@ def get_noaa_atm(id, begin_date, end_date):
     
     j = r.json()
 
-    if ('data' not in j):
+    # if ('data' not in j):
+    if (id == 8656483):
         return pd.DataFrame()
 
     r_df = pd.DataFrame.from_dict(j["data"])
