@@ -72,45 +72,66 @@ def get_noaa_atm(id, begin_date, end_date):
     Returns:
         r_df (pd.DataFrame): DataFrame of atmospheric pressure from specified station and time range. Dates in UTC
     """    
+    import time
+    
     print(inspect.stack()[0][3])    # print the name of the function we just entered
     print(f"get_noaa_atm request: id={id}, begin_date={begin_date}, end_date={end_date}")
     
-    try:
-        query = {'station' : str(id),
-                 'begin_date' : begin_date,
-                 'end_date' : end_date,
-                 'product' : 'air_pressure',
-                 'units' : 'metric',
-                 'time_zone' : 'gmt',
-                 'format' : 'json',
-                 'application' : 'Sunny_Day_Flooding_project, https://github.com/sunny-day-flooding-project'}
-        
-        r = requests.get('https://api.tidesandcurrents.noaa.gov/api/prod/datagetter/', params=query, timeout=10)
-        print("get_noaa_atm status:", r.status_code)
-        if r.status_code != 200:
-            print("get_noaa_atm unexpected response:", repr(r.text[:500]))
+    max_retries = 2
+    retry_delay = 1
+    
+    for attempt in range(max_retries):
+        try:
+            query = {'station' : str(id),
+                     'begin_date' : begin_date,
+                     'end_date' : end_date,
+                     'product' : 'air_pressure',
+                     'units' : 'metric',
+                     'time_zone' : 'gmt',
+                     'format' : 'json',
+                     'application' : 'Sunny_Day_Flooding_project, https://github.com/sunny-day-flooding-project'}
+            
+            if attempt > 0:
+                print(f"get_noaa_atm retry attempt {attempt + 1}/{max_retries}")
+                time.sleep(retry_delay)
+            
+            r = requests.get('https://api.tidesandcurrents.noaa.gov/api/prod/datagetter/', params=query, timeout=10)
+            
+            if r.status_code == 429:
+                if attempt < max_retries - 1:
+                    retry_after = int(r.headers.get('Retry-After', retry_delay))
+                    print(f"get_noaa_atm rate limited (429). Waiting {retry_after} seconds before retry...")
+                    time.sleep(retry_after)
+                    retry_delay = retry_after * 2
+                    continue
+            
+            print("get_noaa_atm status:", r.status_code)
+            if r.status_code != 200:
+                print("get_noaa_atm unexpected response:", repr(r.text[:500]))
+                return pd.DataFrame()
+            
+            j = r.json()
+
+            if ('data' not in j):
+                return pd.DataFrame()
+
+            r_df = pd.DataFrame.from_dict(j["data"])
+            
+            r_df['v'].replace('', np.nan, inplace=True)
+            r_df["t"] = pd.to_datetime(r_df["t"], utc=True) 
+            r_df["id"] = str(id) 
+            r_df["notes"] = "coop"
+            r_df = r_df.loc[:,["id","t","v","notes"]].rename(columns = {"id":"id","t":"date","v":"pressure_mb"})
+
+            return r_df.dropna()
+        except requests.exceptions.RequestException as e:
+            print(f"get_noaa_atm request failed: {type(e).__name__}: {e}")
             return pd.DataFrame()
-        
-        j = r.json()
-
-        if ('data' not in j):
+        except Exception as e:
+            print(f"get_noaa_atm error: {type(e).__name__}: {e}")
             return pd.DataFrame()
-
-        r_df = pd.DataFrame.from_dict(j["data"])
-        
-        r_df['v'].replace('', np.nan, inplace=True)
-        r_df["t"] = pd.to_datetime(r_df["t"], utc=True) 
-        r_df["id"] = str(id) 
-        r_df["notes"] = "coop"
-        r_df = r_df.loc[:,["id","t","v","notes"]].rename(columns = {"id":"id","t":"date","v":"pressure_mb"})
-
-        return r_df.dropna()
-    except requests.exceptions.RequestException as e:
-        print(f"get_noaa_atm request failed: {type(e).__name__}: {e}")
-        return pd.DataFrame()
-    except Exception as e:
-        print(f"get_noaa_atm error: {type(e).__name__}: {e}")
-        return pd.DataFrame()
+    
+    return pd.DataFrame()
     
 def get_nws_atm(id, begin_date, end_date):
     """Retrieve atmospheric pressure data from the NWS API
@@ -123,41 +144,62 @@ def get_nws_atm(id, begin_date, end_date):
     Returns:
         response (str): Still working on this!        
     """    
+    import time
+    
     print(inspect.stack()[0][3])    # print the name of the function we just entered
     print(f"get_nws_atm request: id={id}, begin_date={begin_date}, end_date={end_date}")
     
-    try:
-        new_begin_date = pd.to_datetime(begin_date, utc=True) - timedelta(seconds = 3600)
-        new_end_date = pd.to_datetime(end_date, utc=True) + timedelta(seconds = 3600)
+    max_retries = 2
+    retry_delay = 1
+    
+    for attempt in range(max_retries):
+        try:
+            new_begin_date = pd.to_datetime(begin_date, utc=True) - timedelta(seconds = 3600)
+            new_end_date = pd.to_datetime(end_date, utc=True) + timedelta(seconds = 3600)
 
-        query = {'start' : new_begin_date.isoformat(),
-                 'end' : new_end_date.isoformat()}
-        
-        url = "https://api.weather.gov/stations/" + str(id) + "/observations"
-        print("get_nws_atm url:", url)
-        print("get_nws_atm params:", query)
-        r = requests.get(url, params=query, headers = {'accept': 'application/geo+json'}, timeout=10)
-        print("get_nws_atm status:", r.status_code)
-        if r.status_code != 200:
-            print("get_nws_atm unexpected response:", repr(r.text[:500]))
+            query = {'start' : new_begin_date.isoformat(),
+                     'end' : new_end_date.isoformat()}
+            
+            url = "https://api.weather.gov/stations/" + str(id) + "/observations"
+            if attempt > 0:
+                print(f"get_nws_atm retry attempt {attempt + 1}/{max_retries}")
+                time.sleep(retry_delay)
+            
+            print("get_nws_atm url:", url)
+            print("get_nws_atm params:", query)
+            r = requests.get(url, params=query, headers = {'accept': 'application/geo+json'}, timeout=10)
+            
+            if r.status_code == 429:
+                if attempt < max_retries - 1:
+                    retry_after = int(r.headers.get('Retry-After', retry_delay))
+                    print(f"get_nws_atm rate limited (429). Waiting {retry_after} seconds before retry...")
+                    time.sleep(retry_after)
+                    retry_delay = retry_after * 2
+                    continue
+            
+            print("get_nws_atm status:", r.status_code)
+            if r.status_code != 200:
+                print("get_nws_atm unexpected response:", repr(r.text[:500]))
+                return pd.DataFrame()
+
+            j = r.json()
+            print("get_nws_atm response keys:", list(j.keys()))
+            
+            # r_df = pd.DataFrame.from_dict(j["data"])
+            
+            # r_df["t"] = pd.to_datetime(r_df["t"], utc=True); r_df["id"] = id; r_df["notes"] = "coop"
+            
+            # r_df = r_df.loc[:,["id","t","v","notes"]].rename(columns = {"id":"id","t":"date","v":"pressure_mb"})
+            
             return pd.DataFrame()
-
-        j = r.json()
-        print("get_nws_atm response keys:", list(j.keys()))
-        
-        # r_df = pd.DataFrame.from_dict(j["data"])
-        
-        # r_df["t"] = pd.to_datetime(r_df["t"], utc=True); r_df["id"] = id; r_df["notes"] = "coop"
-        
-        # r_df = r_df.loc[:,["id","t","v","notes"]].rename(columns = {"id":"id","t":"date","v":"pressure_mb"})
-        
-        return pd.DataFrame()
-    except requests.exceptions.RequestException as e:
-        print(f"get_nws_atm request failed: {type(e).__name__}: {e}")
-        return pd.DataFrame()
-    except Exception as e:
-        print(f"get_nws_atm error: {type(e).__name__}: {e}")
-        return pd.DataFrame()
+        except requests.exceptions.RequestException as e:
+            print(f"get_nws_atm request failed: {type(e).__name__}: {e}")
+            return pd.DataFrame()
+        except Exception as e:
+            print(f"get_nws_atm error: {type(e).__name__}: {e}")
+            return pd.DataFrame()
+    
+    return pd.DataFrame()
 
 def get_isu_atm(id, begin_date, end_date):
     """Retrieve atmospheric pressure data from the ISU ASOS download service
@@ -167,53 +209,85 @@ def get_isu_atm(id, begin_date, end_date):
         begin_date (str): Beginning date of requested time period. Format: %Y%m%d %H:%M
         end_date (str): End date of requested time period. Format: %Y%m%d %H:%M
     """   
+    import time
+    
     print(inspect.stack()[0][3])    # print the name of the function we just entered
     print(f"get_isu_atm request: id={id}, begin_date={begin_date}, end_date={end_date}")
     
-    try:
-        new_begin_date = pd.to_datetime(begin_date, utc=True) 
-        new_end_date = pd.to_datetime(end_date, utc=True) + timedelta(days=1)
-        query = {'station' : str(id),
-                 'data' : 'all',
-                 'year1' : new_begin_date.year,
-                 'month1' : new_begin_date.month,
-                 'day1' : new_begin_date.day,
-                 'year2' : new_end_date.year,
-                 'month2' : new_end_date.month,
-                 'day2' : new_end_date.day,
-                 'product' : 'air_pressure',
-                 'format' : 'comma',
-                 'latlon' : 'yes',
-                 'tz' : 'Etc/UTC'
-                 }
-        print("get_isu_atm query:", query)
-        
-        r = requests.get(url = 'https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py', params=query, headers={'User-Agent' : 'Sunny_Day_Flooding_project, https://github.com/sunny-day-flooding-project'}, timeout=10)
-        r.raise_for_status()
-        print("get_isu_atm status:", r.status_code)
-        
-        text = r.text
-        if "station" not in text:
-            print("get_isu_atm: unexpected API response; expected CSV header containing 'station'.")
-            print("status_code:", r.status_code)
-            print("response snippet:", repr(text[:500]))
+    max_retries = 3
+    retry_delay = 1  # start with 1 second
+    
+    for attempt in range(max_retries):
+        try:
+            new_begin_date = pd.to_datetime(begin_date, utc=True) 
+            new_end_date = pd.to_datetime(end_date, utc=True) + timedelta(days=1)
+            query = {'station' : str(id),
+                     'data' : 'all',
+                     'year1' : new_begin_date.year,
+                     'month1' : new_begin_date.month,
+                     'day1' : new_begin_date.day,
+                     'year2' : new_end_date.year,
+                     'month2' : new_end_date.month,
+                     'day2' : new_end_date.day,
+                     'product' : 'air_pressure',
+                     'format' : 'comma',
+                     'latlon' : 'yes',
+                     'tz' : 'Etc/UTC'
+                     }
+            if attempt > 0:
+                print(f"get_isu_atm retry attempt {attempt + 1}/{max_retries}, query: {query}")
+            else:
+                print("get_isu_atm query:", query)
+            
+            r = requests.get(url = 'https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py', params=query, headers={'User-Agent' : 'Sunny_Day_Flooding_project, https://github.com/sunny-day-flooding-project'}, timeout=10)
+            
+            # Handle rate limiting with retry
+            if r.status_code == 429:
+                if attempt < max_retries - 1:
+                    retry_after = int(r.headers.get('Retry-After', retry_delay))
+                    print(f"get_isu_atm rate limited (429). Waiting {retry_after} seconds before retry...")
+                    time.sleep(retry_after)
+                    retry_delay = retry_after * 2  # exponential backoff
+                    continue
+                else:
+                    print(f"get_isu_atm rate limited (429) and max retries exceeded.")
+                    return pd.DataFrame()
+            
+            r.raise_for_status()
+            print("get_isu_atm status:", r.status_code)
+            
+            text = r.text
+            if not text or len(text.strip()) == 0:
+                print("get_isu_atm: API returned empty response body.")
+                return pd.DataFrame()
+            
+            if "station" not in text:
+                print("get_isu_atm: unexpected API response; expected CSV header containing 'station'.")
+                print("status_code:", r.status_code)
+                print("response length:", len(text), "bytes")
+                print("response snippet:", repr(text[:500]))
+                return pd.DataFrame()
+            
+            s = text[text.find("station"):] 
+            data = StringIO(s)
+            r_df = pd.read_csv(filepath_or_buffer=data, lineterminator="\n", na_values=["","NA","M"])
+            print(f"get_isu_atm parsed {r_df.shape[0]} rows from CSV")
+            
+            r_df["date"] = pd.to_datetime(r_df["valid"], utc=True); r_df["id"] = str(id); r_df["notes"] = "ISU"; r_df["pressure_mb"] = r_df["alti"] * 1000 * 0.0338639
+            r_df = r_df.loc[:,["id","date","pressure_mb","notes"]].rename(columns = {"id":"id","t":"date","v":"pressure_mb"})
+            return r_df
+            
+        except requests.exceptions.HTTPError as e:
+            print(f"get_isu_atm HTTP error: {e.response.status_code} {e.response.reason}")
             return pd.DataFrame()
-        
-        s = text[text.find("station"):] 
-        data = StringIO(s)
-        r_df = pd.read_csv(filepath_or_buffer=data, lineterminator="\n", na_values=["","NA","M"])
-        r_df["date"] = pd.to_datetime(r_df["valid"], utc=True); r_df["id"] = str(id); r_df["notes"] = "ISU"; r_df["pressure_mb"] = r_df["alti"] * 1000 * 0.0338639
-        r_df = r_df.loc[:,["id","date","pressure_mb","notes"]].rename(columns = {"id":"id","t":"date","v":"pressure_mb"})
-        return r_df
-    except requests.exceptions.HTTPError as e:
-        print(f"get_isu_atm HTTP error: {e.response.status_code} {e.response.reason}")
-        return pd.DataFrame()
-    except requests.exceptions.RequestException as e:
-        print(f"get_isu_atm request failed: {type(e).__name__}: {e}")
-        return pd.DataFrame()
-    except Exception as e:
-        print(f"get_isu_atm error: {type(e).__name__}: {e}")
-        return pd.DataFrame()
+        except requests.exceptions.RequestException as e:
+            print(f"get_isu_atm request failed: {type(e).__name__}: {e}")
+            return pd.DataFrame()
+        except Exception as e:
+            print(f"get_isu_atm error: {type(e).__name__}: {e}")
+            return pd.DataFrame()
+    
+    return pd.DataFrame()
 
 def get_fiman_atm(id, begin_date, end_date):
     """Retrieve atmospheric pressure data from the NOAA tides and currents API
@@ -337,7 +411,7 @@ def interpolate_atm_data(x, debug = True):
             
             if (atm_data.empty):
                 warnings.warn(message = f"No atm pressure data available for: {selected_place}")
-                pass
+                continue
                         
         # If the atmospheric data falls short of the pressure data by less than an hour (which happens when 
         # the most recent atmospheric observation is not yet available), extrapolate the 
@@ -347,43 +421,44 @@ def interpolate_atm_data(x, debug = True):
         # will get re-calculated with the real atmospheric pressure values later.
         #
 
-        atm_data.sort_values("date").set_index("date")    # not sure if this is necessary, but it seems like a good idea
-        t_last = atm_data["date"].iloc[-1]
-        if atm_data["date"].max() < selected_data["date"].max() and (selected_data["date"].max() - atm_data["date"].max()) < timedelta(seconds = 3600):
-            if atm_data.shape[0] > 1:  # (Must have at least 2 pressure values, otherwise skip it.)
-                print("ENTERED EXTRAPOLATION BLOCK")
-                print("INITIAL ATM DATA")
-                print(atm_data)
-                while(atm_data["date"].max() < selected_data["date"].max() and (selected_data["date"].max() - atm_data["date"].max()) < timedelta(seconds = 3600)):
-                    # duplicate the last row
-                    new_index = atm_data.tail(1).index[0] + 1
-                    new_row = pd.DataFrame(data=atm_data.tail(1).values, index=[new_index], columns=atm_data.columns)
-                    atm_data = pd.concat([atm_data, new_row])    
+        if not atm_data.empty:
+            atm_data.sort_values("date").set_index("date")    # not sure if this is necessary, but it seems like a good idea
+            t_last = atm_data["date"].iloc[-1]
+            if atm_data["date"].max() < selected_data["date"].max() and (selected_data["date"].max() - atm_data["date"].max()) < timedelta(seconds = 3600):
+                if atm_data.shape[0] > 1:  # (Must have at least 2 pressure values, otherwise skip it.)
+                    print("ENTERED EXTRAPOLATION BLOCK")
+                    print("INITIAL ATM DATA")
+                    print(atm_data)
+                    while(atm_data["date"].max() < selected_data["date"].max() and (selected_data["date"].max() - atm_data["date"].max()) < timedelta(seconds = 3600)):
+                        # duplicate the last row
+                        new_index = atm_data.tail(1).index[0] + 1
+                        new_row = pd.DataFrame(data=atm_data.tail(1).values, index=[new_index], columns=atm_data.columns)
+                        atm_data = pd.concat([atm_data, new_row])    
 
-                    # set the time based on the timestep of the previous 2 points
-                    atm_data['date'].iloc[-1] = atm_data['date'].iloc[-2] + (atm_data['date'].iloc[-2] - atm_data['date'].iloc[-3])
-                    # set the value as a linear extrap of the previous 2 points
-                    atm_data["pressure_mb"].iloc[-1] = float(atm_data["pressure_mb"].iloc[-2]) + (float(atm_data["pressure_mb"].iloc[-2]) - float(atm_data["pressure_mb"].iloc[-3]))
+                        # set the time based on the timestep of the previous 2 points
+                        atm_data['date'].iloc[-1] = atm_data['date'].iloc[-2] + (atm_data['date'].iloc[-2] - atm_data['date'].iloc[-3])
+                        # set the value as a linear extrap of the previous 2 points
+                        atm_data["pressure_mb"].iloc[-1] = float(atm_data["pressure_mb"].iloc[-2]) + (float(atm_data["pressure_mb"].iloc[-2]) - float(atm_data["pressure_mb"].iloc[-3]))
 
-                print("APPENDED ATM DATA")
-                print(atm_data)
-                
+                    print("APPENDED ATM DATA")
+                    print(atm_data)
+                    
 
-        combined_data = pd.concat([selected_data.query("date > @atm_data['date'].min() & date < @atm_data['date'].max()") , atm_data]).sort_values("date")
-        # Set the "processed" flag to true for those points that did not use extrapolated atm press values
-        combined_data["processed"] = combined_data["date"] <= t_last
-        combined_data = combined_data.set_index("date")
-        combined_data["pressure_mb"] = combined_data["pressure_mb"].astype(float).interpolate(method='time')
-                
-        interpolated_data = pd.concat([interpolated_data, combined_data.loc[combined_data["place"].notna()].reset_index()[list(selected_data)]])
+            combined_data = pd.concat([selected_data.query("date > @atm_data['date'].min() & date < @atm_data['date'].max()") , atm_data]).sort_values("date")
+            # Set the "processed" flag to true for those points that did not use extrapolated atm press values
+            combined_data["processed"] = combined_data["date"] <= t_last
+            combined_data = combined_data.set_index("date")
+            combined_data["pressure_mb"] = combined_data["pressure_mb"].astype(float).interpolate(method='time')
+                    
+            interpolated_data = pd.concat([interpolated_data, combined_data.loc[combined_data["place"].notna()].reset_index()[list(selected_data)]])
 
-        if debug == True:
-            print("####################################")
-            print(f"- New raw data detected for: {selected_place}")
-            print("- " , selected_data.shape[0] , " new rows")
-            print("- Date duration is: ", dt_duration.days, " days")
-            print("- " , selected_data.shape[0] - combined_data.loc[combined_data["place"].notna()].shape[0], "new observation(s) filtered out b/c not within atm pressure date range")
-            print("####################################")
+            if debug == True:
+                print("####################################")
+                print(f"- New raw data detected for: {selected_place}")
+                print("- " , selected_data.shape[0] , " new rows")
+                print("- Date duration is: ", dt_duration.days, " days")
+                print("- " , selected_data.shape[0] - combined_data.loc[combined_data["place"].notna()].shape[0], "new observation(s) filtered out b/c not within atm pressure date range")
+                print("####################################")
     
     return interpolated_data
 
