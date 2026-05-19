@@ -75,34 +75,42 @@ def get_noaa_atm(id, begin_date, end_date):
     print(inspect.stack()[0][3])    # print the name of the function we just entered
     print(f"get_noaa_atm request: id={id}, begin_date={begin_date}, end_date={end_date}")
     
-    query = {'station' : str(id),
-             'begin_date' : begin_date,
-             'end_date' : end_date,
-             'product' : 'air_pressure',
-             'units' : 'metric',
-             'time_zone' : 'gmt',
-             'format' : 'json',
-             'application' : 'Sunny_Day_Flooding_project, https://github.com/sunny-day-flooding-project'}
-    
-    r = requests.get('https://api.tidesandcurrents.noaa.gov/api/prod/datagetter/', params=query)
-    print("get_noaa_atm status:", r.status_code)
-    if r.status_code != 200:
-        print("get_noaa_atm unexpected response:", repr(r.text[:500]))
-    
-    j = r.json()
+    try:
+        query = {'station' : str(id),
+                 'begin_date' : begin_date,
+                 'end_date' : end_date,
+                 'product' : 'air_pressure',
+                 'units' : 'metric',
+                 'time_zone' : 'gmt',
+                 'format' : 'json',
+                 'application' : 'Sunny_Day_Flooding_project, https://github.com/sunny-day-flooding-project'}
+        
+        r = requests.get('https://api.tidesandcurrents.noaa.gov/api/prod/datagetter/', params=query, timeout=10)
+        print("get_noaa_atm status:", r.status_code)
+        if r.status_code != 200:
+            print("get_noaa_atm unexpected response:", repr(r.text[:500]))
+            return pd.DataFrame()
+        
+        j = r.json()
 
-    if ('data' not in j):
+        if ('data' not in j):
+            return pd.DataFrame()
+
+        r_df = pd.DataFrame.from_dict(j["data"])
+        
+        r_df['v'].replace('', np.nan, inplace=True)
+        r_df["t"] = pd.to_datetime(r_df["t"], utc=True) 
+        r_df["id"] = str(id) 
+        r_df["notes"] = "coop"
+        r_df = r_df.loc[:,["id","t","v","notes"]].rename(columns = {"id":"id","t":"date","v":"pressure_mb"})
+
+        return r_df.dropna()
+    except requests.exceptions.RequestException as e:
+        print(f"get_noaa_atm request failed: {type(e).__name__}: {e}")
         return pd.DataFrame()
-
-    r_df = pd.DataFrame.from_dict(j["data"])
-    
-    r_df['v'].replace('', np.nan, inplace=True)
-    r_df["t"] = pd.to_datetime(r_df["t"], utc=True) 
-    r_df["id"] = str(id) 
-    r_df["notes"] = "coop"
-    r_df = r_df.loc[:,["id","t","v","notes"]].rename(columns = {"id":"id","t":"date","v":"pressure_mb"})
-
-    return r_df.dropna()
+    except Exception as e:
+        print(f"get_noaa_atm error: {type(e).__name__}: {e}")
+        return pd.DataFrame()
     
 def get_nws_atm(id, begin_date, end_date):
     """Retrieve atmospheric pressure data from the NWS API
@@ -118,31 +126,38 @@ def get_nws_atm(id, begin_date, end_date):
     print(inspect.stack()[0][3])    # print the name of the function we just entered
     print(f"get_nws_atm request: id={id}, begin_date={begin_date}, end_date={end_date}")
     
-    new_begin_date = pd.to_datetime(begin_date, utc=True) - timedelta(seconds = 3600)
-    new_end_date = pd.to_datetime(end_date, utc=True) + timedelta(seconds = 3600)
+    try:
+        new_begin_date = pd.to_datetime(begin_date, utc=True) - timedelta(seconds = 3600)
+        new_end_date = pd.to_datetime(end_date, utc=True) + timedelta(seconds = 3600)
 
-    query = {'start' : new_begin_date.isoformat(),
-             'end' : new_end_date.isoformat()}
-    
-    url = "https://api.weather.gov/stations/" + str(id) + "/observations"
-    print("get_nws_atm url:", url)
-    print("get_nws_atm params:", query)
-    r = requests.get(url, params=query, headers = {'accept': 'application/geo+json'})
-    print("get_nws_atm status:", r.status_code)
-    if r.status_code != 200:
-        print("get_nws_atm unexpected response:", repr(r.text[:500]))
+        query = {'start' : new_begin_date.isoformat(),
+                 'end' : new_end_date.isoformat()}
+        
+        url = "https://api.weather.gov/stations/" + str(id) + "/observations"
+        print("get_nws_atm url:", url)
+        print("get_nws_atm params:", query)
+        r = requests.get(url, params=query, headers = {'accept': 'application/geo+json'}, timeout=10)
+        print("get_nws_atm status:", r.status_code)
+        if r.status_code != 200:
+            print("get_nws_atm unexpected response:", repr(r.text[:500]))
+            return pd.DataFrame()
+
+        j = r.json()
+        print("get_nws_atm response keys:", list(j.keys()))
+        
+        # r_df = pd.DataFrame.from_dict(j["data"])
+        
+        # r_df["t"] = pd.to_datetime(r_df["t"], utc=True); r_df["id"] = id; r_df["notes"] = "coop"
+        
+        # r_df = r_df.loc[:,["id","t","v","notes"]].rename(columns = {"id":"id","t":"date","v":"pressure_mb"})
+        
         return pd.DataFrame()
-
-    j = r.json()
-    print("get_nws_atm response keys:", list(j.keys()))
-    
-    # r_df = pd.DataFrame.from_dict(j["data"])
-    
-    # r_df["t"] = pd.to_datetime(r_df["t"], utc=True); r_df["id"] = id; r_df["notes"] = "coop"
-    
-    # r_df = r_df.loc[:,["id","t","v","notes"]].rename(columns = {"id":"id","t":"date","v":"pressure_mb"})
-    
-    return pd.DataFrame()
+    except requests.exceptions.RequestException as e:
+        print(f"get_nws_atm request failed: {type(e).__name__}: {e}")
+        return pd.DataFrame()
+    except Exception as e:
+        print(f"get_nws_atm error: {type(e).__name__}: {e}")
+        return pd.DataFrame()
 
 def get_isu_atm(id, begin_date, end_date):
     """Retrieve atmospheric pressure data from the ISU ASOS download service
@@ -155,45 +170,50 @@ def get_isu_atm(id, begin_date, end_date):
     print(inspect.stack()[0][3])    # print the name of the function we just entered
     print(f"get_isu_atm request: id={id}, begin_date={begin_date}, end_date={end_date}")
     
-    new_begin_date = pd.to_datetime(begin_date, utc=True) 
-    new_end_date = pd.to_datetime(end_date, utc=True) + timedelta(days=1)
-    
-    query = {'station' : str(id),
-             'data' : 'all',
-             'year1' : new_begin_date.year,
-             'month1' : new_begin_date.month,
-             'day1' : new_begin_date.day,
-             'year2' : new_end_date.year,
-             'month2' : new_end_date.month,
-             'day2' : new_end_date.day,
-             'product' : 'air_pressure',
-             'format' : 'comma',
-             'latlon' : 'yes',
-             'tz' : 'Etc/UTC'
-             }
-    print("get_isu_atm query:", query)
-    
-    r = requests.get(url = 'https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py', params=query, headers={'User-Agent' : 'Sunny_Day_Flooding_project, https://github.com/sunny-day-flooding-project'})
-    r.raise_for_status()
-    print("get_isu_atm status:", r.status_code)
-    
-    text = r.text
-    if "station" not in text:
-        print("get_isu_atm: unexpected API response; expected CSV header containing 'station'.")
-        print("status_code:", r.status_code)
-        print("response snippet:", repr(text[:500]))
+    try:
+        new_begin_date = pd.to_datetime(begin_date, utc=True) 
+        new_end_date = pd.to_datetime(end_date, utc=True) + timedelta(days=1)
+        query = {'station' : str(id),
+                 'data' : 'all',
+                 'year1' : new_begin_date.year,
+                 'month1' : new_begin_date.month,
+                 'day1' : new_begin_date.day,
+                 'year2' : new_end_date.year,
+                 'month2' : new_end_date.month,
+                 'day2' : new_end_date.day,
+                 'product' : 'air_pressure',
+                 'format' : 'comma',
+                 'latlon' : 'yes',
+                 'tz' : 'Etc/UTC'
+                 }
+        print("get_isu_atm query:", query)
+        
+        r = requests.get(url = 'https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py', params=query, headers={'User-Agent' : 'Sunny_Day_Flooding_project, https://github.com/sunny-day-flooding-project'}, timeout=10)
+        r.raise_for_status()
+        print("get_isu_atm status:", r.status_code)
+        
+        text = r.text
+        if "station" not in text:
+            print("get_isu_atm: unexpected API response; expected CSV header containing 'station'.")
+            print("status_code:", r.status_code)
+            print("response snippet:", repr(text[:500]))
+            return pd.DataFrame()
+        
+        s = text[text.find("station"):] 
+        data = StringIO(s)
+        r_df = pd.read_csv(filepath_or_buffer=data, lineterminator="\n", na_values=["","NA","M"])
+        r_df["date"] = pd.to_datetime(r_df["valid"], utc=True); r_df["id"] = str(id); r_df["notes"] = "ISU"; r_df["pressure_mb"] = r_df["alti"] * 1000 * 0.0338639
+        r_df = r_df.loc[:,["id","date","pressure_mb","notes"]].rename(columns = {"id":"id","t":"date","v":"pressure_mb"})
+        return r_df
+    except requests.exceptions.HTTPError as e:
+        print(f"get_isu_atm HTTP error: {e.response.status_code} {e.response.reason}")
         return pd.DataFrame()
-    
-    s = text[text.find("station"):] 
-    data = StringIO(s)
-    
-    r_df = pd.read_csv(filepath_or_buffer=data, lineterminator="\n", na_values=["","NA","M"])
-    
-    r_df["date"] = pd.to_datetime(r_df["valid"], utc=True); r_df["id"] = str(id); r_df["notes"] = "ISU"; r_df["pressure_mb"] = r_df["alti"] * 1000 * 0.0338639
-    
-    r_df = r_df.loc[:,["id","date","pressure_mb","notes"]].rename(columns = {"id":"id","t":"date","v":"pressure_mb"})
-    
-    return r_df
+    except requests.exceptions.RequestException as e:
+        print(f"get_isu_atm request failed: {type(e).__name__}: {e}")
+        return pd.DataFrame()
+    except Exception as e:
+        print(f"get_isu_atm error: {type(e).__name__}: {e}")
+        return pd.DataFrame()
 
 def get_fiman_atm(id, begin_date, end_date):
     """Retrieve atmospheric pressure data from the NOAA tides and currents API
@@ -209,21 +229,25 @@ def get_fiman_atm(id, begin_date, end_date):
     print(inspect.stack()[0][3])    # print the name of the function we just entered
     print(f"get_fiman_atm request: id={id}, begin_date={begin_date}, end_date={end_date}")
 
-    new_begin_date = pd.to_datetime(begin_date, utc=True) - timedelta(seconds = 3600)
-    new_end_date = pd.to_datetime(end_date, utc=True) + timedelta(seconds = 3600)
+    try:
+        new_begin_date = pd.to_datetime(begin_date, utc=True) - timedelta(seconds = 3600)
+        new_end_date = pd.to_datetime(end_date, utc=True) + timedelta(seconds = 3600)
 
-    SQLALCHEMY_DATABASE_URL = "postgresql://" + os.environ.get('POSTGRESQL_USER') + ":" + os.environ.get(
-        'POSTGRESQL_PASSWORD') + "@" + os.environ.get('POSTGRESQL_HOSTNAME') + "/" + os.environ.get('POSTGRESQL_DATABASE')
+        SQLALCHEMY_DATABASE_URL = "postgresql://" + os.environ.get('POSTGRESQL_USER') + ":" + os.environ.get(
+            'POSTGRESQL_PASSWORD') + "@" + os.environ.get('POSTGRESQL_HOSTNAME') + "/" + os.environ.get('POSTGRESQL_DATABASE')
 
-    engine = create_engine(SQLALCHEMY_DATABASE_URL)
-    query = "SELECT * FROM api_data WHERE id='" + id + "' AND api_name='FIMAN' AND type='pressure' AND date >= '" + new_begin_date.strftime('%Y-%m-%d %H:%M:%S') + "' AND date <= '" + new_end_date.strftime('%Y-%m-%d %H:%M:%S') + "'"
-    print("get_fiman_atm SQL query:", query)
-    r_df = pd.read_sql_query(query, engine).sort_values(['date']).drop_duplicates()
-    r_df["date"] = pd.to_datetime(r_df["date"], utc = True); 
-    r_df = r_df.loc[:,["id","date","value","api_name"]].rename(columns = {"value":"pressure_mb", "api_name":"notes"})
-    engine.dispose()
+        engine = create_engine(SQLALCHEMY_DATABASE_URL)
+        query = "SELECT * FROM api_data WHERE id='" + id + "' AND api_name='FIMAN' AND type='pressure' AND date >= '" + new_begin_date.strftime('%Y-%m-%d %H:%M:%S') + "' AND date <= '" + new_end_date.strftime('%Y-%m-%d %H:%M:%S') + "'"
+        print("get_fiman_atm SQL query:", query)
+        r_df = pd.read_sql_query(query, engine).sort_values(['date']).drop_duplicates()
+        r_df["date"] = pd.to_datetime(r_df["date"], utc = True); 
+        r_df = r_df.loc[:,["id","date","value","api_name"]].rename(columns = {"value":"pressure_mb", "api_name":"notes"})
+        engine.dispose()
 
-    return r_df
+        return r_df
+    except Exception as e:
+        print(f"get_fiman_atm error: {type(e).__name__}: {e}")
+        return pd.DataFrame()
 
 #####################
 # atm API functions #
