@@ -422,8 +422,8 @@ def interpolate_atm_data(x, debug = True):
         #
 
         if not atm_data.empty:
-            atm_data.sort_values("date").set_index("date")    # not sure if this is necessary, but it seems like a good idea
-            t_last = atm_data["date"].iloc[-1]
+            atm_data = atm_data.sort_values("date").reset_index(drop=True).copy()
+            t_last = atm_data.loc[atm_data.index[-1], "date"]
             if atm_data["date"].max() < selected_data["date"].max() and (selected_data["date"].max() - atm_data["date"].max()) < timedelta(seconds = 3600):
                 if atm_data.shape[0] > 1:  # (Must have at least 2 pressure values, otherwise skip it.)
                     print("ENTERED EXTRAPOLATION BLOCK")
@@ -431,14 +431,19 @@ def interpolate_atm_data(x, debug = True):
                     print(atm_data)
                     while(atm_data["date"].max() < selected_data["date"].max() and (selected_data["date"].max() - atm_data["date"].max()) < timedelta(seconds = 3600)):
                         # duplicate the last row
-                        new_index = atm_data.tail(1).index[0] + 1
-                        new_row = pd.DataFrame(data=atm_data.tail(1).values, index=[new_index], columns=atm_data.columns)
-                        atm_data = pd.concat([atm_data, new_row])    
+                        last_row = atm_data.iloc[[-1]].copy()
+                        atm_data = pd.concat([atm_data, last_row], ignore_index=True)
 
                         # set the time based on the timestep of the previous 2 points
-                        atm_data['date'].iloc[-1] = atm_data['date'].iloc[-2] + (atm_data['date'].iloc[-2] - atm_data['date'].iloc[-3])
+                        atm_data.loc[atm_data.index[-1], 'date'] = (
+                            atm_data.loc[atm_data.index[-2], 'date'] +
+                            (atm_data.loc[atm_data.index[-2], 'date'] - atm_data.loc[atm_data.index[-3], 'date'])
+                        )
                         # set the value as a linear extrap of the previous 2 points
-                        atm_data["pressure_mb"].iloc[-1] = float(atm_data["pressure_mb"].iloc[-2]) + (float(atm_data["pressure_mb"].iloc[-2]) - float(atm_data["pressure_mb"].iloc[-3]))
+                        atm_data.loc[atm_data.index[-1], 'pressure_mb'] = (
+                            float(atm_data.loc[atm_data.index[-2], 'pressure_mb']) +
+                            (float(atm_data.loc[atm_data.index[-2], 'pressure_mb']) - float(atm_data.loc[atm_data.index[-3], 'pressure_mb']))
+                        )
 
                     print("APPENDED ATM DATA")
                     print(atm_data)
