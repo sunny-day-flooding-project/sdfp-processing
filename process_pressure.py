@@ -73,6 +73,7 @@ def get_noaa_atm(id, begin_date, end_date):
         r_df (pd.DataFrame): DataFrame of atmospheric pressure from specified station and time range. Dates in UTC
     """    
     print(inspect.stack()[0][3])    # print the name of the function we just entered
+    print(f"get_noaa_atm request: id={id}, begin_date={begin_date}, end_date={end_date}")
     
     query = {'station' : str(id),
              'begin_date' : begin_date,
@@ -84,6 +85,9 @@ def get_noaa_atm(id, begin_date, end_date):
              'application' : 'Sunny_Day_Flooding_project, https://github.com/sunny-day-flooding-project'}
     
     r = requests.get('https://api.tidesandcurrents.noaa.gov/api/prod/datagetter/', params=query)
+    print("get_noaa_atm status:", r.status_code)
+    if r.status_code != 200:
+        print("get_noaa_atm unexpected response:", repr(r.text[:500]))
     
     j = r.json()
 
@@ -112,6 +116,7 @@ def get_nws_atm(id, begin_date, end_date):
         response (str): Still working on this!        
     """    
     print(inspect.stack()[0][3])    # print the name of the function we just entered
+    print(f"get_nws_atm request: id={id}, begin_date={begin_date}, end_date={end_date}")
     
     new_begin_date = pd.to_datetime(begin_date, utc=True) - timedelta(seconds = 3600)
     new_end_date = pd.to_datetime(end_date, utc=True) + timedelta(seconds = 3600)
@@ -119,9 +124,17 @@ def get_nws_atm(id, begin_date, end_date):
     query = {'start' : new_begin_date.isoformat(),
              'end' : new_end_date.isoformat()}
     
-    r = requests.get("https://api.weather.gov/stations/" + str(id) + "/observations", params=query, headers = {'accept': 'application/geo+json'})
-    
+    url = "https://api.weather.gov/stations/" + str(id) + "/observations"
+    print("get_nws_atm url:", url)
+    print("get_nws_atm params:", query)
+    r = requests.get(url, params=query, headers = {'accept': 'application/geo+json'})
+    print("get_nws_atm status:", r.status_code)
+    if r.status_code != 200:
+        print("get_nws_atm unexpected response:", repr(r.text[:500]))
+        return pd.DataFrame()
+
     j = r.json()
+    print("get_nws_atm response keys:", list(j.keys()))
     
     # r_df = pd.DataFrame.from_dict(j["data"])
     
@@ -129,7 +142,7 @@ def get_nws_atm(id, begin_date, end_date):
     
     # r_df = r_df.loc[:,["id","t","v","notes"]].rename(columns = {"id":"id","t":"date","v":"pressure_mb"})
     
-    pass
+    return pd.DataFrame()
 
 def get_isu_atm(id, begin_date, end_date):
     """Retrieve atmospheric pressure data from the ISU ASOS download service
@@ -140,6 +153,7 @@ def get_isu_atm(id, begin_date, end_date):
         end_date (str): End date of requested time period. Format: %Y%m%d %H:%M
     """   
     print(inspect.stack()[0][3])    # print the name of the function we just entered
+    print(f"get_isu_atm request: id={id}, begin_date={begin_date}, end_date={end_date}")
     
     new_begin_date = pd.to_datetime(begin_date, utc=True) 
     new_end_date = pd.to_datetime(end_date, utc=True) + timedelta(days=1)
@@ -157,10 +171,20 @@ def get_isu_atm(id, begin_date, end_date):
              'latlon' : 'yes',
              'tz' : 'Etc/UTC'
              }
+    print("get_isu_atm query:", query)
     
     r = requests.get(url = 'https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py', params=query, headers={'User-Agent' : 'Sunny_Day_Flooding_project, https://github.com/sunny-day-flooding-project'})
+    r.raise_for_status()
+    print("get_isu_atm status:", r.status_code)
     
-    s = slicer(str(r.content, 'utf-8'), "station")
+    text = r.text
+    if "station" not in text:
+        print("get_isu_atm: unexpected API response; expected CSV header containing 'station'.")
+        print("status_code:", r.status_code)
+        print("response snippet:", repr(text[:500]))
+        return pd.DataFrame()
+    
+    s = text[text.find("station"):] 
     data = StringIO(s)
     
     r_df = pd.read_csv(filepath_or_buffer=data, lineterminator="\n", na_values=["","NA","M"])
@@ -183,6 +207,7 @@ def get_fiman_atm(id, begin_date, end_date):
         r_df (pd.DataFrame): DataFrame of atmospheric pressure from specified station and time range. Dates in UTC
     """    
     print(inspect.stack()[0][3])    # print the name of the function we just entered
+    print(f"get_fiman_atm request: id={id}, begin_date={begin_date}, end_date={end_date}")
 
     new_begin_date = pd.to_datetime(begin_date, utc=True) - timedelta(seconds = 3600)
     new_end_date = pd.to_datetime(end_date, utc=True) + timedelta(seconds = 3600)
@@ -191,7 +216,9 @@ def get_fiman_atm(id, begin_date, end_date):
         'POSTGRESQL_PASSWORD') + "@" + os.environ.get('POSTGRESQL_HOSTNAME') + "/" + os.environ.get('POSTGRESQL_DATABASE')
 
     engine = create_engine(SQLALCHEMY_DATABASE_URL)
-    r_df = pd.read_sql_query("SELECT * FROM api_data WHERE id='" + id + "' AND api_name='FIMAN' AND type='pressure' AND date >= '" + new_begin_date.strftime('%Y-%m-%d %H:%M:%S') + "' AND date <= '" + new_end_date.strftime('%Y-%m-%d %H:%M:%S') + "'", engine).sort_values(['date']).drop_duplicates()
+    query = "SELECT * FROM api_data WHERE id='" + id + "' AND api_name='FIMAN' AND type='pressure' AND date >= '" + new_begin_date.strftime('%Y-%m-%d %H:%M:%S') + "' AND date <= '" + new_end_date.strftime('%Y-%m-%d %H:%M:%S') + "'"
+    print("get_fiman_atm SQL query:", query)
+    r_df = pd.read_sql_query(query, engine).sort_values(['date']).drop_duplicates()
     r_df["date"] = pd.to_datetime(r_df["date"], utc = True); 
     r_df = r_df.loc[:,["id","date","value","api_name"]].rename(columns = {"value":"pressure_mb", "api_name":"notes"})
     engine.dispose()
@@ -215,6 +242,7 @@ def get_atm_pressure(atm_id, atm_src, begin_date, end_date):
         pandas.DataFrame: Atmospheric pressure data for the specified time range and source
     """    
     print(inspect.stack()[0][3])    # print the name of the function we just entered
+    print(f"get_atm_pressure wrapper: atm_id={atm_id}, atm_src={atm_src}, begin_date={begin_date}, end_date={end_date}")
 
     match atm_src.upper():
         case "NOAA":
@@ -257,10 +285,13 @@ def interpolate_atm_data(x, debug = True):
                 range_max = dt_min + (span * i)
                 
                 #print(selected_data.to_string())    # FOR DEBUGGING
+                print(f"Retrieving atm data for chunk {i}/{chunks} for {selected_place}")
+                print(f"  range_min={range_min}, range_max={range_max}")
                 d = get_atm_pressure(atm_id = selected_data["atm_station_id"].unique()[0], 
                                             atm_src = selected_data["atm_data_src"].unique()[0], 
                                             begin_date = range_min.strftime("%Y%m%d %H:%M"),
                                             end_date = range_max.strftime("%Y%m%d %H:%M"))
+                print(f"  chunk {i} atm rows:", d.shape[0])
                 
                 atm_data = pd.concat([atm_data, d]).drop_duplicates()
                 
@@ -272,11 +303,13 @@ def interpolate_atm_data(x, debug = True):
             
         if(selected_data["alt_atm_data_src"].unique()[0] and (atm_data.empty or atm_data['date'].max() < selected_data['date'].min()) ):
             # Try backup source
-            print("Trying backup source...")
+            print("Trying backup source for", selected_place)
+            print("  backup atm_src:", selected_data["alt_atm_data_src"].unique()[0])
             atm_data = get_atm_pressure(atm_id = selected_data["alt_atm_station_id"].unique()[0], 
                                 atm_src = selected_data["alt_atm_data_src"].unique()[0], 
                                 begin_date = dt_min.strftime("%Y%m%d %H:%M"),
                                 end_date = dt_max.strftime("%Y%m%d %H:%M")).drop_duplicates() 
+            print("  backup atm rows:", atm_data.shape[0])
             
             if (atm_data.empty):
                 warnings.warn(message = f"No atm pressure data available for: {selected_place}")
