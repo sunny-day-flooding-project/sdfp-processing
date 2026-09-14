@@ -372,6 +372,9 @@ def interpolate_atm_data(x, debug = True):
         dt_min = dt_range[0]
         dt_max = dt_range[1]
         
+        alternate_atm_data_src = pd.Series(selected_data["alt_atm_data_src"].dropna().unique())
+        alt_atm_data_src = alternate_atm_data_src.iloc[0] if not alternate_atm_data_src.empty else None
+        
         # Shouldn't ever hit this block since the time range on the inital request is limited to 14 days
         if dt_duration >= timedelta(days=30):
             chunks = int(np.ceil(dt_duration / timedelta(days=30)))
@@ -398,13 +401,21 @@ def interpolate_atm_data(x, debug = True):
                                             atm_src = selected_data["atm_data_src"].unique()[0], 
                                             begin_date = dt_min.strftime("%Y%m%d %H:%M"),
                                             end_date = dt_max.strftime("%Y%m%d %H:%M")).drop_duplicates()     
-            
-        if(selected_data["alt_atm_data_src"].unique()[0] and (atm_data.empty or atm_data['date'].max() < selected_data['date'].min()) ):
+
+        primary_covers_selected_range = not atm_data.empty and (
+            atm_data["date"].min() <= dt_min and atm_data["date"].max() >= dt_max
+        )
+        if alt_atm_data_src and not primary_covers_selected_range:
+            print("Primary atm data does not cover the full selected range for", selected_place)
+            print(f"  atm_data rows: {atm_data.shape[0]}")
+            if not atm_data.empty:
+                print(f"  atm min/max: {atm_data['date'].min()} to {atm_data['date'].max()}")
+            print(f"  selected min/max: {dt_min} to {dt_max}")
             # Try backup source
             print("Trying backup source for", selected_place)
-            print("  backup atm_src:", selected_data["alt_atm_data_src"].unique()[0])
+            print("  backup atm_src:", alt_atm_data_src)
             atm_data = get_atm_pressure(atm_id = selected_data["alt_atm_station_id"].unique()[0], 
-                                atm_src = selected_data["alt_atm_data_src"].unique()[0], 
+                                atm_src = alt_atm_data_src, 
                                 begin_date = dt_min.strftime("%Y%m%d %H:%M"),
                                 end_date = dt_max.strftime("%Y%m%d %H:%M")).drop_duplicates() 
             print("  backup atm rows:", atm_data.shape[0])
