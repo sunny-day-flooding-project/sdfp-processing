@@ -402,16 +402,23 @@ def interpolate_atm_data(x, debug = True):
                                             begin_date = dt_min.strftime("%Y%m%d %H:%M"),
                                             end_date = dt_max.strftime("%Y%m%d %H:%M")).drop_duplicates()     
 
-        primary_covers_selected_range = not atm_data.empty and (
-            atm_data["date"].min() <= dt_min and atm_data["date"].max() >= dt_max
-        )
-        if alt_atm_data_src and not primary_covers_selected_range:
-            print("Primary atm data does not cover the full selected range for", selected_place)
+        if atm_data.empty:
+            primary_has_usable_coverage = False
+        else:
+            primary_has_usable_coverage = (
+                atm_data["date"].min() <= dt_max and atm_data["date"].max() >= dt_min
+            ) and (
+                atm_data["date"].max() >= selected_data["date"].max() - timedelta(hours=1)
+            )
+
+        if alt_atm_data_src and not primary_has_usable_coverage:
+            print("Primary atm data does not provide sufficient coverage for", selected_place)
             print(f"  atm_data rows: {atm_data.shape[0]}")
             if not atm_data.empty:
                 print(f"  atm min/max: {atm_data['date'].min()} to {atm_data['date'].max()}")
             print(f"  selected min/max: {dt_min} to {dt_max}")
-            # Try backup source
+            # Try backup source when the primary source is empty or does not reach within approximately
+            # one hour of the newest sensor data, which is the threshold the extrapolation logic expects.
             print("Trying backup source for", selected_place)
             print("  backup atm_src:", alt_atm_data_src)
             atm_data = get_atm_pressure(atm_id = selected_data["alt_atm_station_id"].unique()[0], 
